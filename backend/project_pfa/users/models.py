@@ -1,8 +1,9 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser
-
-
 from django.contrib.auth.models import BaseUserManager
+from django.core.validators import FileExtensionValidator
+
+
 
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
@@ -46,13 +47,22 @@ class User(AbstractBaseUser):
 class Driver(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True)
     cin = models.CharField(max_length=20)
-    email = models.EmailField(max_length=255)
-    telephone = models.CharField(max_length=20)
+    phone_number = models.CharField(max_length=20)
     license_number = models.CharField(max_length=255)
     vehicle_number = models.CharField(max_length=255)
+    current_place = models.CharField(max_length=255)
 
     def __str__(self):
         return f"{self.user} {self.license_number}"
+
+
+class Client(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True)
+    phone_number = models.CharField(max_length=20)
+    current_place = models.CharField(max_length=255)
+
+    def __str__(self):
+        return f"{self.user} - {self.phone_number}"
 
 
 
@@ -68,15 +78,16 @@ class Product(models.Model):
 class Colis(models.Model):
     date = models.DateField()
     ondelevry = models.BooleanField(default=True)
-    creator = models.CharField(max_length=255, blank=True, null=True)
+    creator = models.ForeignKey(Client, on_delete=models.SET_NULL, null=True, blank=True, related_name='colis')
     destination = models.CharField(max_length=255)
     currentPlace = models.CharField(max_length=255)
     transporter = models.CharField(max_length=255)
     products = models.ManyToManyField(Product)
-
+    image = models.ImageField(upload_to='colis_images', null=True, blank=True)
 
     def __str__(self):
         return f"Colis {self.id} - Destination: {self.destination}"
+
     
 
 class Trip(models.Model):

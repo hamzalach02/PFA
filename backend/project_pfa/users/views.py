@@ -1,19 +1,26 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.exceptions import AuthenticationFailed
-from .serializers import UserSerializer, ColisSerializer , DriverSerializer ,TripSerializer,ProductSerializer
-from .models import User, Role ,Driver,Trip , Colis ,Product
+from .serializers import UserSerializer, ColisSerializer , DriverSerializer ,TripSerializer,ProductSerializer,ClientSerializer
+from .models import User, Role ,Driver,Trip , Colis ,Product,Client
 import jwt
 import datetime
 from rest_framework import status
 from django.utils import timezone
+
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
+from rest_framework.parsers import MultiPartParser
+
+
+
 
 class RegisterView(APIView):
     def post(self, request):
         serializer = UserSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
-        role_name = request.data.get('role', 'client')
+        role_name = request.data.get('role', 'client','driver')
         role, created = Role.objects.get_or_create(name=role_name)
         
         user = serializer.save()
@@ -95,30 +102,30 @@ class CreateColisView(APIView):
             payload = jwt.decode(token, 'secret', algorithms=['HS256'])
             user = User.objects.get(id=payload['id'])
             roles = user.roles.all()
-            
+
             expected_role = 'client'
             if any(role.name == expected_role for role in roles):
+                # Get the Client instance for the authenticated user
+                client = Client.objects.get(user=user)
+
+                # Update request data to include the client as creator
+                request.data['creator'] = client.user_id
+
                 colis_serializer = ColisSerializer(data=request.data)
                 if colis_serializer.is_valid():
-                    # Save colis with creator=user
-                    colis = colis_serializer.save(creator=user)
+                    # Save colis with creator=client
+                    colis = colis_serializer.save()
 
                     # Retrieve and save associated products
-                    product_data = request.data.get('products', [])
-                    for product_info in product_data:
-                        # Create or retrieve product based on ID
-                        product_id = product_info.get('id')
-                        if product_id:
-                            product = Product.objects.get(id=product_id)
+                    products_data = request.data.get('products', [])
+                    for product_data in products_data:
+                        product_serializer = ProductSerializer(data=product_data)
+                        if product_serializer.is_valid():
+                            product_serializer.save()
+                            colis.products.add(product_serializer.instance)
                         else:
-                            product_serializer = ProductSerializer(data=product_info)
-                            if product_serializer.is_valid():
-                                product = product_serializer.save()
-                            else:
-                                return Response(product_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-                        
-                        # Associate product with colis
-                        colis.products.add(product)
+                            # If product data is not valid, return error response
+                            return Response(product_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
                     return Response(colis_serializer.data, status=status.HTTP_201_CREATED)
                 return Response(colis_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -127,18 +134,140 @@ class CreateColisView(APIView):
 
         except jwt.ExpiredSignatureError:
             raise AuthenticationFailed('Unauthenticated')
-
         
 
+class ColisImageUploadView(APIView):
+    parser_classes = (MultiPartParser,)
+
+    def post(self, request, colis_id):
+        # Retrieve the JWT token from the cookie
+        token = request.COOKIES.get('jwt')
+        if not token:
+            return Response({'error': 'JWT token not provided'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Decode the JWT token to get the user ID
+        try:
+            payload = jwt.decode(token, 'secret', algorithms=['HS256'])
+            user_id = payload['id']
+        except jwt.ExpiredSignatureError:
+            return Response({'error': 'Expired JWT token'}, status=status.HTTP_401_UNAUTHORIZED)
+        except jwt.InvalidTokenError:
+            return Response({'error': 'Invalid JWT token'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Retrieve the Colis instance
+        try:
+            colis = Colis.objects.get(pk=colis_id)
+        except Colis.DoesNotExist:
+            return Response({'error': f'Colis with ID {colis_id} does not exist'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Check if the authenticated user is the creator of the Colis
+        if user_id != colis.creator.user_id:
+            return Response({'error': 'You are not authorized to upload an image for this colis'}, status=status.HTTP_403_FORBIDDEN)
+
+        image_file = request.FILES.get('image')
+        if not image_file:
+            return Response({'error': 'No image file provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Construct the file name with user_id and creator_id
+        file_name = f'{user_id}_{colis.creator_id}_{image_file.name}'
+
+        # Save the image file to colis_images directory with the constructed file name
+        try:
+            colis.image.save(file_name, image_file)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # Return the URL of the saved image
+        image_url = request.build_absolute_uri(colis.image.url)
+        return Response({'image_url': image_url}, status=status.HTTP_201_CREATED)    
+
+class ClientColisListView(APIView):
+    def get(self, request):
+        # Retrieve JWT token from the request cookies
+        token = request.COOKIES.get('jwt')
+        if not token:
+            return Response({'error': 'JWT token not provided'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Decode JWT token and retrieve user information
+        try:
+            payload = jwt.decode(token, 'secret', algorithms=['HS256'])
+            user_id = payload['id']
+            user = User.objects.get(id=user_id)
+        except jwt.ExpiredSignatureError:
+            return Response({'error': 'Expired JWT token'}, status=status.HTTP_401_UNAUTHORIZED)
+        except (jwt.InvalidTokenError, User.DoesNotExist):
+            return Response({'error': 'Invalid JWT token'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Check if the user has the "client" role
+        if not user.roles.filter(name='client').exists():
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Retrieve Colis instances associated with the client
+        client_colis = Colis.objects.filter(creator=user.client)
+
+        # Serialize Colis instances
+        serializer = ColisSerializer(client_colis, many=True)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+
+
+class RegisterClientAPIView(APIView):
+    def post(self, request, *args, **kwargs):
+        user_data = request.data.copy()
+        role_name = user_data.pop('role', 'client')  # Extract and remove role from user data
+        user_serializer = UserSerializer(data=user_data)
+
+        if user_serializer.is_valid():
+            user = user_serializer.save()
+
+            # Add client role to the user
+            client_role, created = Role.objects.get_or_create(name=role_name)
+            user.roles.add(client_role)
+
+            client_data = request.data
+            client_data['user'] = user.id
+            client_serializer = ClientSerializer(data=client_data)
+
+            if client_serializer.is_valid():
+                client_serializer.save()
+                return Response({"message": "Client registered successfully"}, status=status.HTTP_201_CREATED)
+
+            user.delete()  # Rollback user creation if client creation fails
+            return Response(client_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(user_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class RegisterDriverAPIView(APIView):
-    def post(self, request, *args, **kwargs):
-        serializer = DriverSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response({"message": "Driver registered successfully"}, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+     def post(self, request, *args, **kwargs):
+        user_data = request.data.copy()
+        role_name = user_data.pop('role', 'driver')  # Extract and remove role from user data
+        user_serializer = UserSerializer(data=user_data)
+
+        if user_serializer.is_valid():
+            user = user_serializer.save()
+
+            # Add client role to the user
+            driver_role, created = Role.objects.get_or_create(name=role_name)
+            user.roles.add(driver_role)
+
+            driver_data = request.data
+            driver_data['user'] = user.id
+            driver_serializer = DriverSerializer(data=driver_data)
+
+            if driver_serializer.is_valid():
+                driver_serializer.save()
+                return Response({"message": "Client registered successfully"}, status=status.HTTP_201_CREATED)
+
+            user.delete()  # Rollback user creation if client creation fails
+            return Response(driver_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(user_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+
 
 class DriverCheckView(APIView):
     def get(self, request):
@@ -295,4 +424,11 @@ class CurrentTripColisAPIView(APIView):
             colis_data.append(colis_info)
 
         return Response({"colis": colis_data}, status=status.HTTP_200_OK)
+
+
+
+
+
+
+
 

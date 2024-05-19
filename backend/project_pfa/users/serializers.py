@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Role,Colis, Product,Driver,Trip
+from .models import User, Role,Colis, Product,Driver,Trip,Client
 from django.contrib.auth.hashers import make_password
 
 class RoleSerializer(serializers.ModelSerializer):
@@ -30,7 +30,7 @@ class ColisSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Colis
-        fields = ['id', 'date', 'ondelevry', 'creator', 'destination', 'currentPlace', 'transporter', 'products']
+        fields = ['id', 'date', 'ondelevry', 'creator', 'destination', 'currentPlace', 'transporter', 'products', 'image']
 
     def create(self, validated_data):
         products_data = validated_data.pop('products')
@@ -40,32 +40,24 @@ class ColisSerializer(serializers.ModelSerializer):
         return colis
     
 
-class DriverSerializer(serializers.ModelSerializer):
-    user = UserSerializer()
+    
+class ClientSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Client
+        fields = ['user', 'phone_number', 'current_place']
 
+class DriverSerializer(serializers.ModelSerializer):
     class Meta:
         model = Driver
-        fields = ['user', 'cin', 'telephone', 'license_number', 'vehicle_number']
+        fields = ['user', 'cin', 'phone_number', 'current_place','license_number', 'vehicle_number']
 
-    def create(self, validated_data):
-        user_data = validated_data.pop('user')
-        user_serializer = UserSerializer(data=user_data)
-        
-        if user_serializer.is_valid(raise_exception=True):
-            user = user_serializer.save()
-
-            # Assign the driver role to the user
-            driver_role = Role.objects.get(name='driver')
-            user.roles.add(driver_role)
-            
-            # Create the Driver
-            driver = Driver.objects.create(user=user, **validated_data)
-            
-            return driver
-        else:
-            raise serializers.ValidationError(user_serializer.errors)
-        
+   
 class TripSerializer(serializers.ModelSerializer):
     class Meta:
         model = Trip
         fields = ['id', 'driver', 'start_date', 'end_date', 'current_place', 'cities_to_visit', 'state', 'colis']
+
+
+
+
+
