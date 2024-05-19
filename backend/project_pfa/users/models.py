@@ -43,6 +43,19 @@ class User(AbstractBaseUser):
     objects = CustomUserManager()
 
 
+class Driver(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True)
+    cin = models.CharField(max_length=20)
+    email = models.EmailField(max_length=255)
+    telephone = models.CharField(max_length=20)
+    license_number = models.CharField(max_length=255)
+    vehicle_number = models.CharField(max_length=255)
+
+    def __str__(self):
+        return f"{self.user} {self.license_number}"
+
+
+
 class Product(models.Model):
     poids = models.DecimalField(max_digits=5, decimal_places=2)
     description = models.CharField(max_length=255)
@@ -51,14 +64,34 @@ class Product(models.Model):
     def __str__(self):
         return self.description
 
+
 class Colis(models.Model):
     date = models.DateField()
     ondelevry = models.BooleanField(default=True)
-    creator = models.CharField(max_length=255)
+    creator = models.CharField(max_length=255, blank=True, null=True)
     destination = models.CharField(max_length=255)
     currentPlace = models.CharField(max_length=255)
     transporter = models.CharField(max_length=255)
     products = models.ManyToManyField(Product)
 
+
     def __str__(self):
         return f"Colis {self.id} - Destination: {self.destination}"
+    
+
+class Trip(models.Model):
+    STATE_CHOICES = [
+        ('on road', 'On Road'),
+        ('end', 'End')
+    ]
+
+    driver = models.ForeignKey(Driver, on_delete=models.CASCADE)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    current_place = models.CharField(max_length=255)
+    cities_to_visit = models.TextField()  # Assuming a comma-separated list of cities
+    state = models.CharField(max_length=10, choices=STATE_CHOICES, default='on road')
+    colis = models.ManyToManyField(Colis, blank=True)
+
+    def __str__(self):
+        return f"Trip for Driver {self.driver.user.name} ({self.driver.user.email}) - Start Date: {self.start_date}, End Date: {self.end_date}"
