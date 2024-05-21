@@ -50,7 +50,7 @@ class Driver(models.Model):
     phone_number = models.CharField(max_length=20)
     license_number = models.CharField(max_length=255)
     vehicle_number = models.CharField(max_length=255)
-    current_place = models.CharField(max_length=255)
+    current_place = models.JSONField(default=list, null=True, blank=True)
 
     def __str__(self):
         return f"{self.user} {self.license_number}"
