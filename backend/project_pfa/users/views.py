@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.exceptions import AuthenticationFailed
-from .serializers import UserSerializer, ColisSerializer , DriverSerializer ,TripSerializer,ProductSerializer,ClientSerializer
+from .serializers import UserSerializer, ColisSerializer , DriverSerializer ,TripSerializer,ProductSerializer,ClientSerializer,BonSerializer
 from .models import User, Role ,Driver,Trip , Colis ,Product,Client
 import jwt
 import datetime
@@ -11,6 +11,8 @@ from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.parsers import MultiPartParser
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
 
 
 
@@ -137,6 +139,51 @@ class CreateColisView(APIView):
             raise AuthenticationFailed('Unauthenticated')
 
         
+class CreateBonView(APIView):
+    def post(self, request):
+        # Retrieve JWT token from the request cookies
+        token = request.COOKIES.get('jwt')
+        if not token:
+            return Response({'error': 'JWT token not provided'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Decode JWT token and retrieve user information
+        try:
+            payload = jwt.decode(token, 'secret', algorithms=['HS256'])
+            user_id = payload['id']
+            user = User.objects.get(id=user_id)
+        except jwt.ExpiredSignatureError:
+            return Response({'error': 'Expired JWT token'}, status=status.HTTP_401_UNAUTHORIZED)
+        except (jwt.InvalidTokenError, User.DoesNotExist):
+            return Response({'error': 'Invalid JWT token'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Check if the user has the "client" role
+        if not user.roles.filter(name='client').exists():
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Parse request data
+        colis_id = request.data.get('colis')
+        if colis_id is None:
+            return Response({'error': 'colis_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            colis = Colis.objects.get(id=colis_id)
+        except Colis.DoesNotExist:
+            return Response({'error': 'Colis not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Create the Bon instance
+        serializer = BonSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.validated_data['colis'] = colis  # Assign colis instance
+            pdf_file = request.FILES.get('pdf_invoice')
+            if pdf_file:
+                file_name = default_storage.save(f'invoices/{pdf_file.name}', ContentFile(pdf_file.read()))
+                serializer.validated_data['pdf_invoice'] = file_name
+            
+            bon = serializer.save()
+            return Response(BonSerializer(bon).data, status=status.HTTP_201_CREATED)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class ColisImageUploadView(APIView):
     parser_classes = (MultiPartParser,)

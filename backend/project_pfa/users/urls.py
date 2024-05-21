@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import RegisterView,LoginView,UserView,LogoutView,LoggedInUsersView,CreateColisView,RegisterDriverAPIView, DriverCheckView ,CreateTripAPIView, ValidateColisAPIView,CurrentTripColisAPIView,RegisterClientAPIView,ColisImageUploadView,ClientColisListView,PickColisView,DeliverColisView,UpdateCurrentPlaceDriverAPIView,GetCurrentLocationDriverAPIView
+from .views import RegisterView,LoginView,UserView,LogoutView,LoggedInUsersView,CreateColisView,RegisterDriverAPIView, DriverCheckView ,CreateTripAPIView, ValidateColisAPIView,CurrentTripColisAPIView,RegisterClientAPIView,ColisImageUploadView,ClientColisListView,PickColisView,DeliverColisView,UpdateCurrentPlaceDriverAPIView,GetCurrentLocationDriverAPIView,CreateBonView
 
 
 urlpatterns = [
@@ -23,6 +23,7 @@ urlpatterns = [
     path('delivercolis',DeliverColisView.as_view()),
     path('updatedriverplace',UpdateCurrentPlaceDriverAPIView.as_view()),
     path('getdriverplace',GetCurrentLocationDriverAPIView.as_view()),
+    path('generatebon',CreateBonView.as_view()),
 
 
 

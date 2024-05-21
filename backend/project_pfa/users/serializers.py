@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Role,Colis, Product,Driver,Trip,Client
+from .models import User, Role,Colis, Product,Driver,Trip,Client,Bon
 from django.contrib.auth.hashers import make_password
 
 class RoleSerializer(serializers.ModelSerializer):
@@ -12,7 +12,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'name', 'email', 'password', 'roles']
+        fields = ['id', 'first_name','last_name', 'email', 'password', 'roles']
         extra_kwargs = {
             'password': {'write_only': True},
             'name': {'required': True},
@@ -23,6 +23,9 @@ class UserSerializer(serializers.ModelSerializer):
         validated_data['password'] = make_password(validated_data['password'])
         user = User.objects.create(**validated_data)
         return user
+    
+
+
 
 class ProductSerializer(serializers.ModelSerializer):
     class Meta:
@@ -64,7 +67,12 @@ class ColisSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
     
+class BonSerializer(serializers.ModelSerializer):
+    colis = ColisSerializer(read_only=True)
 
+    class Meta:
+        model = Bon
+        fields = ['id', 'colis', 'date', 'pdf_invoice']
     
 class ClientSerializer(serializers.ModelSerializer):
     class Meta:

@@ -34,7 +34,8 @@ class Role(models.Model):
         return self.name
 
 class User(AbstractBaseUser):
-    name = models.CharField(max_length=255)
+    first_name = models.CharField(max_length=255)
+    last_name = models.CharField(max_length=255)
     email = models.CharField(max_length=255, unique=True)
     password = models.CharField(max_length=255)
     roles = models.ManyToManyField(Role)  
@@ -101,7 +102,14 @@ class Colis(models.Model):
     
 
 
-# models.py
+class Bon(models.Model):
+    colis = models.OneToOneField(Colis, on_delete=models.CASCADE, related_name='bon')
+    date = models.DateField()
+    pdf_invoice = models.FileField(upload_to='invoices/')
+
+    def __str__(self):
+        return f"Bon for Colis {self.colis.id} - Date: {self.date}"
+
 
 
 class Trip(models.Model):
