@@ -108,12 +108,13 @@ class CreateColisView(APIView):
                 # Get the Client instance for the authenticated user
                 client = Client.objects.get(user=user)
 
-                # Update request data to include the client as creator
+                # Update request data to include the client as creator and default state
                 request.data['creator'] = client.user_id
+                request.data['state'] = 'pending'
 
                 colis_serializer = ColisSerializer(data=request.data)
                 if colis_serializer.is_valid():
-                    # Save colis with creator=client
+                    # Save colis with creator=client and default state
                     colis = colis_serializer.save()
 
                     # Retrieve and save associated products
@@ -134,6 +135,7 @@ class CreateColisView(APIView):
 
         except jwt.ExpiredSignatureError:
             raise AuthenticationFailed('Unauthenticated')
+
         
 
 class ColisImageUploadView(APIView):
@@ -365,12 +367,19 @@ class ValidateColisAPIView(APIView):
         if not isinstance(colis_data, list):
             colis_data = [colis_data]
 
-        # Add the colis to the current trip
+        # Add the colis to the current trip if state is pending
         for colis_id in colis_data:
             colis = Colis.objects.get(id=colis_id)
-            current_trip.colis.add(colis)
+            if colis.state == 'pending':
+                colis.state = 'waiting for pick up'  # Set state to "waiting for pick up"
+                colis.transporter = user_id
+                colis.save()
+                current_trip.colis.add(colis)
+            else:
+                return Response({"message": "Colis state is not pending"}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response({"message": "Colis validated and added to the trip successfully"}, status=status.HTTP_200_OK)
+
 
 class CurrentTripColisAPIView(APIView):
     def get(self, request):
@@ -401,34 +410,120 @@ class CurrentTripColisAPIView(APIView):
             raise AuthenticationFailed('Driver does not have an ongoing trip')
 
         # Retrieve colis associated with the current trip
-        colis = current_trip.colis.all()
-        
-        # Serialize colis and retrieve associated products
-        colis_data = []
-        for colis_obj in colis:
-            colis_info = {
-                "id": colis_obj.id,
-                "date": colis_obj.date,
-                "ondelevry": colis_obj.ondelevry,
-                "creator": colis_obj.creator,
-                "destination": colis_obj.destination,
-                "currentPlace": colis_obj.currentPlace,
-                "transporter": colis_obj.transporter,
-                "products": [{
-                    "id": product.id,
-                    "poids": product.poids,
-                    "description": product.description,
-                    "category": product.category
-                } for product in colis_obj.products.all()]
-            }
-            colis_data.append(colis_info)
+        colis_in_trip = current_trip.colis.all()
+        serializer = ColisSerializer(colis_in_trip, many=True)
 
-        return Response({"colis": colis_data}, status=status.HTTP_200_OK)
+        return Response(serializer.data)
 
 
 
 
 
+class PickColisView(APIView):
+    def post(self, request):
+        # Retrieve JWT token from the cookie
+        token = request.COOKIES.get('jwt')
+
+        if not token:
+            raise AuthenticationFailed('Unauthorized')
+
+        try:
+            payload = jwt.decode(token, 'secret', algorithms=['HS256'])
+        except jwt.ExpiredSignatureError:
+            raise AuthenticationFailed('Token expired')
+        except jwt.DecodeError:
+            raise AuthenticationFailed('Invalid token')
+
+        # Check if user has driver role and get the driver
+        user_id = payload.get('id')
+        driver = Driver.objects.filter(user_id=user_id).first()
+
+        if not driver:
+            raise AuthenticationFailed('User is not a driver')
+
+        # Get the current trip for the driver
+        current_trip = Trip.objects.filter(driver=driver, end_date__gt=timezone.now()).first()
+
+        if not current_trip:
+            raise AuthenticationFailed('Driver does not have an ongoing trip')
+
+        # Retrieve colis ID from the request
+        colis_id = request.data.get('colis')
+
+        if not colis_id:
+            raise NotFound('Colis ID not provided')
+
+        try:
+            colis = Colis.objects.get(id=colis_id)
+        except Colis.DoesNotExist:
+            raise NotFound('Colis not found')
+
+        # Check if the colis is part of the current trip
+        if not current_trip.colis.filter(id=colis.id).exists():
+            raise AuthenticationFailed('Colis is not part of the current trip')
+
+        # Set the state of the colis to "picked up"
+        colis.state = 'picked up'
+        colis.save()
+
+        # Update the colis current place to the current place of the trip
+        colis.currentPlace = current_trip.current_place
+        colis.save()
+
+        return Response({"message": "Colis picked up successfully"}, status=status.HTTP_200_OK)
 
 
 
+
+class DeliverColisView(APIView):
+    def post(self, request):
+        # Retrieve JWT token from the cookie
+        token = request.COOKIES.get('jwt')
+
+        if not token:
+            raise AuthenticationFailed('Unauthorized')
+
+        try:
+            payload = jwt.decode(token, 'secret', algorithms=['HS256'])
+        except jwt.ExpiredSignatureError:
+            raise AuthenticationFailed('Token expired')
+        except jwt.DecodeError:
+            raise AuthenticationFailed('Invalid token')
+
+        # Check if user has driver role and get the driver
+        user_id = payload.get('id')
+        driver = Driver.objects.filter(user_id=user_id).first()
+
+        if not driver:
+            raise AuthenticationFailed('User is not a driver')
+
+        # Get the current trip for the driver
+        current_trip = Trip.objects.filter(driver=driver, end_date__gt=timezone.now()).first()
+
+        if not current_trip:
+            raise AuthenticationFailed('Driver does not have an ongoing trip')
+
+        # Retrieve colis ID from the request
+        colis_id = request.data.get('colis')
+
+        if not colis_id:
+            raise NotFound('Colis ID not provided')
+
+        try:
+            colis = Colis.objects.get(id=colis_id)
+        except Colis.DoesNotExist:
+            raise NotFound('Colis not found')
+
+        # Check if the colis is part of the current trip
+        if not current_trip.colis.filter(id=colis.id).exists():
+            raise AuthenticationFailed('Colis is not part of the current trip')
+
+        # Set the state of the colis to "picked up"
+        colis.state = 'delivered'
+        colis.save()
+
+        # Update the colis current place to the current place of the trip
+        colis.currentPlace = colis.destination
+        colis.save()
+
+        return Response({"message": "Colis delivred up successfully"}, status=status.HTTP_200_OK)

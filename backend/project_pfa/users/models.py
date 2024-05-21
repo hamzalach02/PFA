@@ -75,34 +75,45 @@ class Product(models.Model):
         return self.description
 
 
+
 class Colis(models.Model):
+    STATE_CHOICES = [
+        ('pending', 'Pending'),
+        ('waiting for pick up', 'Waiting for pick up'),
+        ('picked up', 'Picked up'),
+        ('delivered', 'Delivered')
+    ]
+
     date = models.DateField()
-    ondelevry = models.BooleanField(default=True)
+    state = models.CharField(max_length=20, choices=STATE_CHOICES, default='pending')
     creator = models.ForeignKey(Client, on_delete=models.SET_NULL, null=True, blank=True, related_name='colis')
     destination = models.CharField(max_length=255)
     currentPlace = models.CharField(max_length=255)
     transporter = models.CharField(max_length=255)
     products = models.ManyToManyField(Product)
     image = models.ImageField(upload_to='colis_images', null=True, blank=True)
+    receiver_first_name = models.CharField(max_length=50,null=True, blank=True)
+    receiver_last_name = models.CharField(max_length=50,null=True, blank=True)
+    receiver_phone_number = models.CharField(max_length=15,null=True, blank=True)
 
     def __str__(self):
         return f"Colis {self.id} - Destination: {self.destination}"
-
     
 
-class Trip(models.Model):
-    STATE_CHOICES = [
-        ('on road', 'On Road'),
-        ('end', 'End')
-    ]
 
+# models.py
+
+
+class Trip(models.Model):
     driver = models.ForeignKey(Driver, on_delete=models.CASCADE)
-    start_date = models.DateField()
-    end_date = models.DateField()
+    start_date = models.DateTimeField(auto_now_add=True)
+    end_date = models.DateTimeField(null=True, blank=True)
+    started = models.BooleanField(default=False)
+    finished = models.BooleanField(default=False)
     current_place = models.CharField(max_length=255)
-    cities_to_visit = models.TextField()  # Assuming a comma-separated list of cities
-    state = models.CharField(max_length=10, choices=STATE_CHOICES, default='on road')
+    cities_to_visit = models.JSONField(default=list)
     colis = models.ManyToManyField(Colis, blank=True)
 
     def __str__(self):
-        return f"Trip for Driver {self.driver.user.name} ({self.driver.user.email}) - Start Date: {self.start_date}, End Date: {self.end_date}"
+        return f"Trip ID: {self.id} - Driver: {self.driver.user.username}"
+

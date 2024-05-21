@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import RegisterView,LoginView,UserView,LogoutView,LoggedInUsersView,CreateColisView,RegisterDriverAPIView, DriverCheckView ,CreateTripAPIView, ValidateColisAPIView,CurrentTripColisAPIView,RegisterClientAPIView,ColisImageUploadView,ClientColisListView
+from .views import RegisterView,LoginView,UserView,LogoutView,LoggedInUsersView,CreateColisView,RegisterDriverAPIView, DriverCheckView ,CreateTripAPIView, ValidateColisAPIView,CurrentTripColisAPIView,RegisterClientAPIView,ColisImageUploadView,ClientColisListView,PickColisView,DeliverColisView
 
 
 urlpatterns = [
@@ -19,6 +19,8 @@ urlpatterns = [
     path('registerclient',RegisterClientAPIView.as_view()),
     path('mycolislist',ClientColisListView.as_view()),
     path('addimagecolis/<int:colis_id>/', ColisImageUploadView.as_view(), name='add_image_colis'),
+    path('pickcolis',PickColisView.as_view()),
+    path('delivercolis',DeliverColisView.as_view()),
 
 
 

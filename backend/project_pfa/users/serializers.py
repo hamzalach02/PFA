@@ -13,7 +13,11 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'name', 'email', 'password', 'roles']
-        extra_kwargs = {'password': {'write_only': True}}
+        extra_kwargs = {
+            'password': {'write_only': True},
+            'name': {'required': True},
+           
+        }
 
     def create(self, validated_data):
         validated_data['password'] = make_password(validated_data['password'])
@@ -25,12 +29,18 @@ class ProductSerializer(serializers.ModelSerializer):
         model = Product
         fields = ['id', 'poids', 'description', 'category']
 
+
+
 class ColisSerializer(serializers.ModelSerializer):
     products = ProductSerializer(many=True)
 
     class Meta:
         model = Colis
-        fields = ['id', 'date', 'ondelevry', 'creator', 'destination', 'currentPlace', 'transporter', 'products', 'image']
+        fields = [
+            'id', 'date', 'state', 'creator', 'destination', 'currentPlace', 
+            'transporter', 'products', 'receiver_first_name', 
+            'receiver_last_name', 'receiver_phone_number'
+        ]
 
     def create(self, validated_data):
         products_data = validated_data.pop('products')
@@ -38,6 +48,21 @@ class ColisSerializer(serializers.ModelSerializer):
         for product_data in products_data:
             Product.objects.create(colis=colis, **product_data)
         return colis
+
+
+    def update(self, instance, validated_data):
+        products_data = validated_data.pop('products', None)
+        
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        
+        if products_data:
+            instance.products.clear()  # Clear existing related products
+            for product_data in products_data:
+                Product.objects.create(**product_data)  # Recreate products
+
+        instance.save()
+        return instance
     
 
     
@@ -55,9 +80,6 @@ class DriverSerializer(serializers.ModelSerializer):
 class TripSerializer(serializers.ModelSerializer):
     class Meta:
         model = Trip
-        fields = ['id', 'driver', 'start_date', 'end_date', 'current_place', 'cities_to_visit', 'state', 'colis']
-
-
-
+        fields = ['id', 'driver', 'start_date', 'end_date', 'started', 'finished', 'current_place', 'cities_to_visit' , 'colis']
 
 
