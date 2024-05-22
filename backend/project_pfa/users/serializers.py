@@ -42,7 +42,8 @@ class ColisSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'date', 'state', 'creator', 'destination', 'currentPlace', 
             'transporter', 'products', 'receiver_first_name', 
-            'receiver_last_name', 'receiver_phone_number'
+            'receiver_last_name', 'receiver_phone_number',
+            'weight', 'estimated_price', 'estimated_delivery_time'
         ]
 
     def create(self, validated_data):
@@ -52,17 +53,16 @@ class ColisSerializer(serializers.ModelSerializer):
             Product.objects.create(colis=colis, **product_data)
         return colis
 
-
     def update(self, instance, validated_data):
         products_data = validated_data.pop('products', None)
         
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         
-        if products_data:
+        if products_data is not None:
             instance.products.clear()  # Clear existing related products
             for product_data in products_data:
-                Product.objects.create(**product_data)  # Recreate products
+                Product.objects.create(colis=instance, **product_data)  # Associate products with the colis
 
         instance.save()
         return instance

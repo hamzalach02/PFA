@@ -77,6 +77,7 @@ class Product(models.Model):
 
 
 
+
 class Colis(models.Model):
     STATE_CHOICES = [
         ('pending', 'Pending'),
@@ -93,19 +94,25 @@ class Colis(models.Model):
     transporter = models.CharField(max_length=255)
     products = models.ManyToManyField(Product)
     image = models.ImageField(upload_to='colis_images', null=True, blank=True)
-    receiver_first_name = models.CharField(max_length=50,null=True, blank=True)
-    receiver_last_name = models.CharField(max_length=50,null=True, blank=True)
-    receiver_phone_number = models.CharField(max_length=15,null=True, blank=True)
+    receiver_first_name = models.CharField(max_length=50, null=True, blank=True)
+    receiver_last_name = models.CharField(max_length=50, null=True, blank=True)
+    receiver_phone_number = models.CharField(max_length=15, null=True, blank=True)
+    
+    # New fields
+    weight = models.FloatField(null=True, blank=True)
+    estimated_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    estimated_delivery_time = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return f"Colis {self.id} - Destination: {self.destination}"
+
     
 
 
 class Bon(models.Model):
     colis = models.OneToOneField(Colis, on_delete=models.CASCADE, related_name='bon')
     date = models.DateField()
-    pdf_invoice = models.FileField(upload_to='invoices/')
+    pdf_invoice = models.FileField(upload_to='invoices')
 
     def __str__(self):
         return f"Bon for Colis {self.colis.id} - Date: {self.date}"

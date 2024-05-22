@@ -139,5 +139,5 @@ CORS_ALLOW_ALL_ORIGINS = True  # Allow requests from any origin
 
 # settings.py
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost','20a0-105-77-106-224.ngrok-free.app']
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost','44b5-160-179-99-92.ngrok-free.app']
 
