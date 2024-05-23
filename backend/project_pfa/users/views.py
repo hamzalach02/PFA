@@ -261,7 +261,7 @@ class RegisterDriverAPIView(APIView):
 
             if driver_serializer.is_valid():
                 driver_serializer.save()
-                return Response({"message": "Client registered successfully"}, status=status.HTTP_201_CREATED)
+                return Response({"message": "Driver registered successfully"}, status=status.HTTP_201_CREATED)
 
             user.delete()  # Rollback user creation if client creation fails
             return Response(driver_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -527,3 +527,67 @@ class DeliverColisView(APIView):
         colis.save()
 
         return Response({"message": "Colis delivred up successfully"}, status=status.HTTP_200_OK)
+
+
+class UpdateCurrentPlaceDriverAPIView(APIView):
+    def post(self, request):
+        # Retrieve JWT token from the headers
+        token = request.headers.get('Authorization')
+
+        if not token:
+            raise AuthenticationFailed('Unauthorized')
+
+        try:
+            # Extract the token value from the "Bearer" scheme
+            token = token.split()[1]
+            payload = jwt.decode(token, 'secret', algorithms=['HS256'])
+        except jwt.ExpiredSignatureError:
+            raise AuthenticationFailed('Token expired')
+        except jwt.DecodeError:
+            raise AuthenticationFailed('Invalid token')
+
+        # Check if user is a driver
+        user_id = payload.get('id')
+        driver = Driver.objects.filter(user_id=user_id).first()
+
+        if not driver:
+            raise AuthenticationFailed('User is not a driver')
+
+        # Get the new current place from the request
+        new_current_place = request.data.get('current_place')
+
+        # Update the driver's current place
+        driver.current_place = new_current_place
+        driver.save()
+
+        return Response({"message": "Current place updated successfully"}, status=status.HTTP_200_OK)
+
+
+class GetCurrentLocationDriverAPIView(APIView):
+    def get(self, request):
+        # Retrieve JWT token from the cookie
+        token = request.COOKIES.get('jwt')
+
+        if not token:
+            raise AuthenticationFailed('Unauthorized')
+
+        try:
+            payload = jwt.decode(token, 'secret', algorithms=['HS256'])
+        except jwt.ExpiredSignatureError:
+            raise AuthenticationFailed('Token expired')
+        except jwt.DecodeError:
+            raise AuthenticationFailed('Invalid token')
+
+        # Check if user has driver role and get the driver
+        user_id = payload.get('id')
+        driver = Driver.objects.filter(user_id=user_id).first()
+
+        if not driver:
+            raise AuthenticationFailed('User is not a driver')
+
+        # Get the current place of the driver
+        current_place = driver.current_place
+
+        return Response({
+            "current_place": current_place
+        })
