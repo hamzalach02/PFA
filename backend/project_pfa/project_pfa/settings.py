@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 
 from pathlib import Path
 
+import os
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -141,3 +143,8 @@ CORS_ALLOW_ALL_ORIGINS = True  # Allow requests from any origin
 
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost','44b5-160-179-99-92.ngrok-free.app']
 
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Define the path to the colis_images directory
+COLIS_IMAGES_DIR = os.path.join(BASE_DIR, 'colis_images')

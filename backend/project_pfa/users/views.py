@@ -1,6 +1,6 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.exceptions import AuthenticationFailed, NotFound
 from .serializers import UserSerializer, ColisSerializer , DriverSerializer ,TripSerializer,ProductSerializer,ClientSerializer,BonSerializer
 from .models import User, Role ,Driver,Trip , Colis ,Product,Client
 import jwt
@@ -13,7 +13,12 @@ from django.views.decorators.csrf import csrf_exempt
 from rest_framework.parsers import MultiPartParser
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
-
+from django.http import JsonResponse
+from django.db.models import Count
+from django.utils import timezone
+from django.db.models.functions import ExtractDay
+from django.utils.dateformat import DateFormat
+from django.db.models.functions import TruncDate
 
 
 
@@ -22,10 +27,14 @@ class RegisterView(APIView):
         serializer = UserSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
-        role_name = request.data.get('role', 'client','driver')
+        # Get the role from the request data, defaulting to 'client' if not provided
+        role_name = request.data.get('role', 'client')
         role, created = Role.objects.get_or_create(name=role_name)
         
+        # Save the user instance
         user = serializer.save()
+        
+        # Add the role to the user
         user.roles.add(role)
         
         return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -56,12 +65,13 @@ class LoginView(APIView):
 
 class UserView(APIView):
     def get(self, request):
-        token = request.COOKIES.get('jwt')
-
-        if not token:
+        auth_header = request.headers.get('Authorization')
+        
+        if not auth_header:
             raise AuthenticationFailed('Unauthenticated')
 
         try:
+            token = auth_header.split(' ')[1]
             payload = jwt.decode(token, 'secret', algorithms=['HS256'])
             user = User.objects.get(id=payload['id'])
             roles = user.roles.all()
@@ -75,6 +85,8 @@ class UserView(APIView):
 
         except jwt.ExpiredSignatureError:
             raise AuthenticationFailed('Unauthenticated')
+        except (IndexError, jwt.DecodeError, User.DoesNotExist):
+            raise AuthenticationFailed('Unauthorized')
 
 class LoggedInUsersView(APIView):
     def get(self, request):
@@ -638,3 +650,457 @@ class GetCurrentLocationDriverAPIView(APIView):
         return Response({
             "current_place": current_place
         })
+    
+
+    ## admin api 
+
+## show the clients for the admin 
+
+class AdminClientView(APIView):
+    def get(self, request):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            raise AuthenticationFailed('Unauthenticated')
+
+        try:
+            token = auth_header.split(' ')[1]
+            payload = jwt.decode(token, 'secret', algorithms=['HS256'])
+            user = User.objects.get(id=payload['id'])
+            roles = user.roles.all()
+
+            # Check for admin role
+            if roles.filter(name='admin').exists():
+                clients = Client.objects.all()
+                clients_data = [
+                    {
+                        'id': client.user.id,
+                        'first_name': client.user.first_name,
+                        'last_name': client.user.last_name,
+                        'email': client.user.email,
+                        'phone_number': client.phone_number,
+                        'current_place': client.current_place,
+                    }
+                    for client in clients
+                ]
+                return Response(clients_data, status=status.HTTP_200_OK)
+
+            # Check for other roles
+            expected_roles = ['driver', 'client']
+            for role in roles:
+                if role.name in expected_roles:
+                    return Response({'message': f'{role.name.capitalize()} page'})
+
+            raise AuthenticationFailed('Unauthorized')
+
+        except jwt.ExpiredSignatureError:
+            raise AuthenticationFailed('Unauthenticated')
+        except (IndexError, jwt.DecodeError, User.DoesNotExist):
+            raise AuthenticationFailed('Unauthorized')
+
+##show the drivers for the admin 
+
+
+class AdminDriversView(APIView):
+    def get(self, request):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            raise AuthenticationFailed('Unauthenticated')
+
+        try:
+            token = auth_header.split(' ')[1]
+            payload = jwt.decode(token, 'secret', algorithms=['HS256'])
+            user = User.objects.get(id=payload['id'])
+            roles = user.roles.all()
+
+            # Check for admin role
+            if roles.filter(name='admin').exists():
+                drivers = Driver.objects.all()
+                drivers_data = [
+                    {
+                        'id': driver.user.id,
+                        'first_name': driver.user.first_name,
+                        'last_name': driver.user.last_name,
+                        'email': driver.user.email,
+                        'cin': driver.cin,
+                        'phone_number': driver.phone_number,
+                        'license_number': driver.license_number,
+                        'vehicle_number': driver.vehicle_number,
+                        'current_place': driver.current_place,
+                    }
+                    for driver in drivers
+                ]
+                return Response(drivers_data, status=status.HTTP_200_OK)
+
+            raise AuthenticationFailed('Unauthorized')
+
+        except jwt.ExpiredSignatureError:
+            raise AuthenticationFailed('Unauthenticated')
+        except (IndexError, jwt.DecodeError, User.DoesNotExist):
+            raise AuthenticationFailed('Unauthorized')
+
+
+## delete a client via id 
+
+
+class DeleteClientView(APIView):
+    def delete(self, request, client_id):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            raise AuthenticationFailed('Unauthenticated')
+
+        try:
+            token = auth_header.split(' ')[1]
+            payload = jwt.decode(token, 'secret', algorithms=['HS256'])
+            user = User.objects.get(id=payload['id'])
+            roles = user.roles.all()
+
+            # Check for admin role
+            if not roles.filter(name='admin').exists():
+                raise AuthenticationFailed('Unauthorized')
+
+            # Retrieve the client and associated user
+            try:
+                client = Client.objects.get(user_id=client_id)
+                user = client.user
+            except Client.DoesNotExist:
+                return Response({'error': 'Client not found'}, status=status.HTTP_404_NOT_FOUND)
+
+            # Delete the client and user
+            client.delete()
+            user.delete()
+
+            return Response({'message': 'Client and associated user deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+
+        except jwt.ExpiredSignatureError:
+            raise AuthenticationFailed('Unauthenticated')
+        except jwt.InvalidTokenError:
+            raise AuthenticationFailed('Unauthenticated')
+        except User.DoesNotExist:
+            raise AuthenticationFailed('Unauthenticated')
+        
+
+
+## delete driver via id 
+
+class DeleteDriverView(APIView):
+    def delete(self, request, driver_id):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            raise AuthenticationFailed('Unauthenticated')
+
+        try:
+            token = auth_header.split(' ')[1]
+            payload = jwt.decode(token, 'secret', algorithms=['HS256'])
+            user = User.objects.get(id=payload['id'])
+            roles = user.roles.all()
+
+            # Check for admin role
+            if not roles.filter(name='admin').exists():
+                raise AuthenticationFailed('Unauthorized')
+
+            # Retrieve the driver and associated user
+            try:
+                driver = Driver.objects.get(user_id=driver_id)
+                user = driver.user
+            except Driver.DoesNotExist:
+                return Response({'error': 'Driver not found'}, status=status.HTTP_404_NOT_FOUND)
+
+            # Delete the driver and user
+            driver.delete()
+            user.delete()
+
+            return Response({'message': 'Driver and associated user deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+
+        except jwt.ExpiredSignatureError:
+            raise AuthenticationFailed('Unauthenticated')
+        except jwt.InvalidTokenError:
+            raise AuthenticationFailed('Unauthenticated')
+        except User.DoesNotExist:
+            raise AuthenticationFailed('Unauthenticated')
+        
+
+
+##update driver : 
+class UpdateDriverView(APIView):
+    def put(self, request, id):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            raise AuthenticationFailed('Unauthenticated')
+
+        try:
+            token = auth_header.split(' ')[1]
+            payload = jwt.decode(token, 'secret', algorithms=['HS256'])
+            user = User.objects.get(id=payload['id'])
+            roles = user.roles.all()
+
+            # Check for admin role
+            if roles.filter(name='admin').exists():
+                driver = Driver.objects.get(user_id=id)
+                driver_user = User.objects.get(id=id)
+                # Update driver information based on request data
+                driver_user.first_name = request.data.get('first_name', driver_user.first_name)
+                driver_user.last_name = request.data.get('last_name', driver_user.last_name)
+                driver_user.email = request.data.get('email', driver_user.email)
+                driver_user.save()
+                driver.cin = request.data.get('cin', driver.cin)
+                driver.phone_number = request.data.get('phone_number', driver.phone_number)
+                driver.license_number = request.data.get('license_number', driver.license_number)
+                driver.vehicle_number = request.data.get('vehicle_number', driver.vehicle_number)
+                driver.current_place = request.data.get('current_place', driver.current_place)
+                driver.save()
+                return Response({'message': 'Driver updated successfully'}, status=status.HTTP_200_OK)
+
+            raise AuthenticationFailed('Unauthorized')
+
+        except jwt.ExpiredSignatureError:
+            raise AuthenticationFailed('Unauthenticated')
+        except (IndexError, jwt.DecodeError, User.DoesNotExist, Driver.DoesNotExist):
+            raise AuthenticationFailed('Unauthorized')
+        
+
+
+class UpdateClientView(APIView):
+    def put(self, request, id):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            raise AuthenticationFailed('Unauthenticated')
+
+        try:
+            token = auth_header.split(' ')[1]
+            payload = jwt.decode(token, 'secret', algorithms=['HS256'])
+            user = User.objects.get(id=payload['id'])
+            roles = user.roles.all()
+
+            # Check for admin role
+            if roles.filter(name='admin').exists():
+                client = Client.objects.get(user_id=id)
+                client_user = User.objects.get(id=id)
+                # Update driver information based on request data
+                client_user.first_name = request.data.get('first_name', client_user.first_name)
+                client_user.last_name = request.data.get('last_name', client_user.last_name)
+                client_user.email = request.data.get('email', client_user.email)
+                client_user.save()
+                client.phone_number = request.data.get('phone_number', client.phone_number)
+                client.current_place = request.data.get('current_place', client.current_place)
+                client.save()
+                return Response({'message': 'Client updated successfully'}, status=status.HTTP_200_OK)
+
+            raise AuthenticationFailed('Unauthorized')
+
+        except jwt.ExpiredSignatureError:
+            raise AuthenticationFailed('Unauthenticated')
+        except (IndexError, jwt.DecodeError, User.DoesNotExist, Client.DoesNotExist):
+            raise AuthenticationFailed('Unauthorized')
+        
+
+
+class AdminColisView(APIView):
+    def get(self, request):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            raise AuthenticationFailed('Unauthenticated')
+
+        try:
+            token = auth_header.split(' ')[1]
+            payload = jwt.decode(token, 'secret', algorithms=['HS256'])
+            user_id = payload['id']
+            user = User.objects.get(id=user_id)
+            roles = user.roles.all()
+
+            # Check if the user has the admin role
+            if roles.filter(name='admin').exists():
+                colis = Colis.objects.all()
+                serializer = ColisSerializer(colis, many=True)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+
+            raise AuthenticationFailed('Unauthorized')
+
+        except jwt.ExpiredSignatureError:
+            raise AuthenticationFailed('Unauthenticated')
+        except (IndexError, jwt.DecodeError, User.DoesNotExist):
+            raise AuthenticationFailed('Unauthorized')
+
+
+
+class UpdateColisById(APIView):
+    def put(self, request, colis_id):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            raise AuthenticationFailed('Unauthenticated')
+
+        try:
+            token = auth_header.split(' ')[1]
+            payload = jwt.decode(token, 'secret', algorithms=['HS256'])
+            user = User.objects.get(id=payload['id'])
+            roles = user.roles.all()
+
+            # Check for admin role
+            if not roles.filter(name='admin').exists():
+                raise AuthenticationFailed('Unauthorized')
+
+            colis = Colis.objects.get(id=colis_id)
+            serializer = ColisSerializer(colis, data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        except jwt.ExpiredSignatureError:
+            raise AuthenticationFailed('Unauthenticated')
+        except (jwt.DecodeError, Colis.DoesNotExist):
+            raise NotFound('Colis not found')
+
+class DeleteColisById(APIView):
+    def delete(self, request, colis_id):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            raise AuthenticationFailed('Unauthenticated')
+
+        try:
+            token = auth_header.split(' ')[1]
+            payload = jwt.decode(token, 'secret', algorithms=['HS256'])
+            user = User.objects.get(id=payload['id'])
+            roles = user.roles.all()
+
+            # Check for admin role
+            if not roles.filter(name='admin').exists():
+                raise AuthenticationFailed('Unauthorized')
+
+            colis = Colis.objects.get(id=colis_id)
+            colis.products.clear()  # Remove all related products from the colis before deletion
+            colis.delete()
+            return Response({'message': 'Colis and associated products deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+
+        except jwt.ExpiredSignatureError:
+            raise AuthenticationFailed('Unauthenticated')
+        except (jwt.DecodeError, Colis.DoesNotExist):
+            raise NotFound('Colis not found')
+        
+
+
+
+
+class UpdateProductById(APIView):
+    def put(self, request, product_id):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            raise AuthenticationFailed('Unauthenticated')
+
+        try:
+            token = auth_header.split(' ')[1]
+            payload = jwt.decode(token, 'secret', algorithms=['HS256'])
+            user = User.objects.get(id=payload['id'])
+            roles = user.roles.all()
+
+            # Check for admin role
+            if not roles.filter(name='admin').exists():
+                raise AuthenticationFailed('Unauthorized')
+
+            product = Product.objects.get(id=product_id)
+            serializer = ProductSerializer(product, data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        except jwt.ExpiredSignatureError:
+            raise AuthenticationFailed('Unauthenticated')
+        except (jwt.DecodeError, Product.DoesNotExist):
+            raise NotFound('Product not found')
+
+
+class DeleteProductById(APIView):
+    def delete(self, request, product_id):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            raise AuthenticationFailed('Unauthenticated')
+
+        try:
+            token = auth_header.split(' ')[1]
+            payload = jwt.decode(token, 'secret', algorithms=['HS256'])
+            user = User.objects.get(id=payload['id'])
+            roles = user.roles.all()
+
+            # Check for admin role
+            if not roles.filter(name='admin').exists():
+                raise AuthenticationFailed('Unauthorized')
+
+            product = Product.objects.get(id=product_id)
+            colis_list = Colis.objects.filter(products__id=product_id)
+            for colis in colis_list:
+                colis.products.remove(product)
+
+            product.delete()
+            return Response({'message': 'Product deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+
+        except jwt.ExpiredSignatureError:
+            raise AuthenticationFailed('Unauthenticated')
+        except (jwt.DecodeError, Product.DoesNotExist):
+            raise NotFound('Product not found')
+        
+
+
+class ColisByStateView(APIView):
+    def get(self, request):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            raise AuthenticationFailed('Authorization header missing')
+
+        try:
+            token = auth_header.split(' ')[1]
+            payload = jwt.decode(token, 'secret', algorithms=['HS256'])
+            user_id = payload['id']
+            # Here you might need to customize how you fetch the user and its roles based on your User model
+            user = User.objects.get(id=user_id)
+            roles = user.roles.all()
+
+            if roles.filter(name='admin').exists():
+                colis_by_state = Colis.objects.values('state').annotate(count=Count('state'))
+                data = [{'state': item['state'], 'count': item['count']} for item in colis_by_state]
+                return JsonResponse(data, safe=False)
+            else:
+                raise AuthenticationFailed('User is not authorized to access this resource')
+
+        except jwt.ExpiredSignatureError:
+            raise AuthenticationFailed('JWT token expired')
+        except (jwt.InvalidTokenError, User.DoesNotExist):
+            raise AuthenticationFailed('Invalid JWT token')
+        
+
+
+
+class ColisMonthlyStatsView(APIView):
+    def get(self, request):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            raise AuthenticationFailed('Authorization header missing')
+
+        try:
+            token = auth_header.split(' ')[1]
+            payload = jwt.decode(token, 'secret', algorithms=['HS256'])
+            user_id = payload['id']
+            # Here you might need to customize how you fetch the user and its roles based on your User model
+            user = User.objects.get(id=user_id)
+            roles = user.roles.all()
+
+            if roles.filter(name='admin').exists():
+                # Get the start and end date of the current month
+                today = timezone.now()
+                start_of_month = today.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+                end_of_month = start_of_month.replace(day=1, month=start_of_month.month + 1) - timezone.timedelta(seconds=1)
+
+                # Query colis created within the current month
+                colis_by_day = Colis.objects.filter(date__gte=start_of_month, date__lte=end_of_month) \
+                    .annotate(month_day=TruncDate('date')) \
+                    .values('month_day') \
+                    .annotate(count=Count('id'))
+
+                data = [{'month_day': item['month_day'].strftime('%B %d'), 'count': item['count']} for item in colis_by_day]
+                return JsonResponse(data, safe=False)
+            else:
+                raise AuthenticationFailed('User is not authorized to access this resource')
+
+        except jwt.ExpiredSignatureError:
+            raise AuthenticationFailed('JWT token expired')
+        except (jwt.InvalidTokenError, User.DoesNotExist):
+            raise AuthenticationFailed('Invalid JWT token')
