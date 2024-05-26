@@ -21,3 +21,5 @@ urlpatterns = [
     path('admin/', admin.site.urls),
      path('api/', include('users.urls'))
 ]
+if settings.DEBUG:
+    urlpatterns += static('/colis_images/', document_root=settings.COLIS_IMAGES_DIR)
