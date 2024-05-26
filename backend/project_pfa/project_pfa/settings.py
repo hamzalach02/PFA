@@ -141,3 +141,8 @@ CORS_ALLOW_ALL_ORIGINS = True  # Allow requests from any origin
 
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost','ddf8-105-77-106-224.ngrok-free.app']
 
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Define the path to the colis_images directory
+COLIS_IMAGES_DIR = os.path.join(BASE_DIR, 'colis_images')
+
