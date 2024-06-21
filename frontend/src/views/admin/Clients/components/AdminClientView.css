@@ -1,0 +1,55 @@
+.admin-client-view {
+    width: 100%;
+    margin-bottom: 20px;
+  }
+  
+  .admin-client-view h2 {
+    font-size: 24px;
+    margin-bottom: 20px;
+  }
+  
+  .admin-client-view .chakra-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  .admin-client-view .chakra-table th,
+  .admin-client-view .chakra-table td {
+    padding: 12px;
+    border: none;
+  }
+  
+  .admin-client-view .chakra-table th {
+    background-color: #f0f2f5;
+    color: #4a5568;
+    font-weight: bold;
+    text-align: left;
+  }
+  
+  .admin-client-view .chakra-table td {
+    background-color: #ffffff;
+    border-bottom: 1px solid #cbd5e0;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+  
+  .admin-client-view .chakra-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+  
+  .admin-client-view .action-buttons button {
+    margin-right: 5px;
+  }
+  
+  .admin-client-view .column {
+    border-right: 1px solid #cbd5e0;
+  }
+  
+  .admin-client-view .chakra-table thead::after {
+    content: "";
+    display: block;
+    border-bottom: 1px solid #cbd5e0;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+  }

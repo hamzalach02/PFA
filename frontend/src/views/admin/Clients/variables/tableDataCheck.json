@@ -1,0 +1,32 @@
+[
+  {
+    "nom":"AYA",
+    "prenom": "El Feddani",
+    "cin": "AHH235",
+    "adresse": "A",
+    "telephone": "0273838329",
+    "sex": "F",
+    "date de naissance": "17/08/2001",
+    "ACTION": 75.5
+  },
+  {
+    "nom":"Asmaa ",
+    "prenom": "El Bouazzoui",
+    "cin": "CHH536",
+    "adresse": "B",
+    "telephone": "0273838329",
+    "sex": "F",
+    "date de naissance": "17/08/2001",
+    "ACTION": 25.5
+  },
+  {
+    "nom":"Asma",
+    "prenom": "Chkirida",
+    "cin": "BHH2633",
+    "adresse": "C",
+    "telephone": "0273838329",
+    "sex": "F",
+    "date de naissance": "17/08/2001",
+    "ACTION": 90
+  }
+]

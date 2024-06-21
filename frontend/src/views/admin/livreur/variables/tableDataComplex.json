@@ -1,0 +1,26 @@
+[
+  {
+    "nom":"AYA",
+    "prenom": "El Feddani",
+    "cin": "AHH235",
+    "permis": "A",
+    "telephone": "0273838329",
+    "ACTION": 75.5
+  },
+  {
+    "nom":"Asmaa ",
+    "prenom": "El Bouazzoui",
+    "cin": "CHH536",
+    "permis": "B",
+    "telephone": "0273838329",
+    "ACTION": 25.5
+  },
+  {
+    "nom":"Asma",
+    "prenom": "Chkirida",
+    "cin": "BHH2633",
+    "permis": "C",
+    "telephone": "0273838329",
+    "ACTION": 90
+  }
+]

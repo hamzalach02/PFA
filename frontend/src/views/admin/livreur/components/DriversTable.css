@@ -1,0 +1,33 @@
+.drivers-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+  }
+  
+  .drivers-table th,
+  .drivers-table td {
+    padding: 12px;
+    border: none;
+  }
+  
+  .drivers-table th {
+    background-color: #f0f2f5;
+    color: #4a5568;
+    font-weight: bold;
+    text-align: left;
+  }
+  
+  .drivers-table td {
+    background-color: #ffffff;
+    border-bottom: 1px solid #cbd5e0;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+  
+  .action-buttons button {
+    margin-right: 5px;
+  }
+  
+  .column {
+    border-right: 1px solid #cbd5e0;
+  }
+  
